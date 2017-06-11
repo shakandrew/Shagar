@@ -21,14 +21,15 @@ public class GameView {
 
     public void initMenu() {
         menu = new MenuView();
-        frame = new JFrame("Shagar");
         game = new PlayingView();
     }
 
     public void initGame() {
         //menu
+        frame = new JFrame("Shagar");
+
         game.setPreferredSize(new Dimension(Default.gameScreenWidth, Default.gameScreenHeight));
-        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        frame.setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
         frame.setLayout(new BorderLayout());
         frame.add(game, BorderLayout.CENTER);
         frame.pack();
@@ -46,8 +47,8 @@ public class GameView {
 
     public Pair<Double, Double> moveVector(int x, int y) {
         double x_res, y_res, width, height;
-        width = Default.gameScreenWidth - x;
-        height = Default.gameScreenHeight - y;
+        width = Default.gameScreenWidth / 2 - x;
+        height = Default.gameScreenHeight / 2 - y;
         x_res = (-width) / Math.sqrt(width * width + height * height);
         y_res = (-height) / Math.sqrt(width * width + height * height);
         return new Pair<>(x_res, y_res);
@@ -119,7 +120,7 @@ public class GameView {
         public void paint(Graphics graphics) {
             Cell player = model.getPlayer();
             Cell bot = model.getBot();
-            int y_view = (2 * player.getMass() / Default.field_scale + 1) * Default.field_scale;
+            int y_view = (int) (2 * player.getRadius() / (double) Default.field_scale + 1) * Default.field_scale;
             int x_view = y_view * Default.gameScreenWidth / Default.gameScreenHeight;
             int x_pos = (int) Math.round(player.getX());
             int y_pos = (int) Math.round(player.getY());
@@ -130,14 +131,34 @@ public class GameView {
             graphics.setColor(Color.WHITE);
             graphics.fillRect(0, 0, Default.gameScreenWidth, Default.gameScreenHeight);
 
-            scale = y_view / Default.gameScreenHeight;
+            scale = y_view / (double) Default.gameScreenHeight;
 
             drawCell(graphics, Default.gameScreenWidth / 2, Default.gameScreenHeight / 2, (int) (player.getRadius() / scale), Color.RED);
 
+            drawCell(graphics, (int) (Default.gameScreenWidth / 2 - (x_pos - bot.getX()) * (1 / scale)),
+                    (int) (Default.gameScreenHeight / 2 - (y_pos - bot.getY()) * (1 / scale)), (int) (bot.getRadius() / scale), Color.BLUE);
+
             for (Pair<Integer, Integer> i : list) {
-                int x = (int) (Default.gameScreenWidth / 2 - (x_pos - i.getFirst() * (1 / scale)));
-                int y = (int) (Default.gameScreenHeight / 2 - (y_pos - i.getSecond() * (1 / scale)));
+                int x = (int) (Default.gameScreenWidth / 2 - (x_pos - i.getFirst()) * (1 / scale));
+                int y = (int) (Default.gameScreenHeight / 2 - (y_pos - i.getSecond()) * (1 / scale));
                 drawCell(graphics, x, y, Default.cellRadius, randomColor(i.getFirst(), i.getSecond()));
+            }
+
+            graphics.setColor(Color.BLACK);
+            graphics.setFont(new Font("Times New Roman", 1, 20));
+            graphics.drawString(x_pos + " " + y_pos + " " + list.size() + " " + player.getSpeed(), 1700, 50);
+
+            graphics.drawString(player.getMass() + "", Default.gameScreenWidth / 2, Default.gameScreenHeight / 2);
+
+            if (GameController.end > 1) {
+                String message;
+                if (GameController.end == 2)
+                    message = "YOU WON";
+                else
+                    message = "YOU WERE DEFEATED";
+                graphics.setColor(Color.GREEN);
+                graphics.setFont(new Font("Times New Roman", 1, 100));
+                graphics.drawString(message, Default.gameScreenWidth / 3, Default.gameScreenHeight / 2);
             }
 
             graphics.dispose();

@@ -6,23 +6,17 @@ import java.util.*;
  */
 public class GameController {
     private static boolean gameRunning;
-    private int totalMass;
     private static GameModel model;
     private static GameView view;
-    private double dX;
-    private double dY;
-    private double speed;
-
+    public static int end; // 0 - menu | 1 - game | 2 - player won | 3 - player lost
 
     public GameController() {
-        model = new GameModel((Default.fieldWidth / 100), (Default.fieldHeight / 100),
-                (Default.fieldWidth / 10), (Default.fieldHeight / 10));
+
         view = new GameView();
         view.initMenu();
 
         gameRunning = false;
 
-        view.getGame().addMML(new MouseAct());
         view.getMenu().addStartListener(new StartButtonListener());
         view.getMenu().addExitListener(new ExitButtonListener());
         view.getMenu().setVisible(true);
@@ -31,28 +25,36 @@ public class GameController {
 
     private void checkCellEating(Cell active_cell) {
         int x = (int) Math.round(active_cell.getX()), y = (int) Math.round(active_cell.getY()), radius = active_cell.getRadius();
-        FieldMap food_cells = model.getCells();
         //load cells from range(x1..x2,y1..y2) to result
-        ArrayList<Pair<Integer, Integer>> result = food_cells.getDataFromRange(Math.max(x - radius, 0),
+        ArrayList<Pair<Integer, Integer>> result = model.getCells().getDataFromRange(Math.max(x - radius, 0),
                 Math.min(x + radius, Default.fieldWidth), Math.max(y - radius, 0), Math.min(y + radius, Default.fieldHeight));
+
         if (result.size() == 0) return;
+
         for (Pair<Integer, Integer> i : result) {
             if (Default.sqr(i.getFirst() - x) + Default.sqr(i.getSecond() - y) < Default.sqr(radius)) {
-                food_cells.delData(i.getFirst(), i.getSecond());
-                //active_cell.setMass(active_cell.getMass() + Default.cellMassST);
-                totalMass--;
+                model.delCell(i.getFirst(), i.getSecond());
+                active_cell.setMass(active_cell.getMass() + Default.cellMassST);
             }
         }
-        /*if (totalMass != Default.totalMass)
-            GameModel.generateCells(Default.totalMass - totalMass, food_cells, Math.max(x - radius, 0),
-                    Math.min(x + radius, Default.fieldWidth), Math.max(y - radius, 0), Math.min(y + radius, Default.fieldHeight));*/
+        //TODO
+       /*result = food_cells.getDataFromRange(Math.max(x - radius, 0),
+                Math.min(x + radius, Default.fieldWidth), Math.max(y - radius, 0), Math.min(y + radius, Default.fieldHeight));
+        *//*
+        if (model.getTotalmass() < Default.totalMass)
+            GameModel.generateCells(Default.totalMass - model.getTotalmass(),
+                    food_cells, Math.max(x - radius, 0), Math.min(x + radius, Default.fieldWidth),
+                    Math.max(y - radius, 0), Math.min(y + radius, Default.fieldHeight));*/
     }
 
-    private Cell checkPlayerEating() {
-        Cell result = null, player = model.getPlayer(), bot = model.getBot();
-        if (canEat(player, bot)) result = player;
-        if (canEat(bot, player)) result = bot;
-        return result;
+    private void checkPlayerEating() {
+        for (Cell first : model.getPlayers())
+            for (Cell second : model.getPlayers())
+                if (first != second) {
+                    if (canEat(first, second))
+                        first.setMass(first.getMass() + second.getMass());
+                    model.delPlayer(second);
+                }
     }
 
     //first tries to eat second
@@ -60,7 +62,7 @@ public class GameController {
         if (first.getMass() < second.getMass() * Default.eatingRatio) return false;
         double dist_bet_rad = Math.sqrt(Default.sqr(first.getX() - second.getX()) +
                 Default.sqr(first.getY() - second.getY()));
-        return first.getRadius() / 2 - dist_bet_rad > Default.eatingDistance * second.getRadius() / 2;
+        return (first.getRadius() / 2 - dist_bet_rad > Default.eatingDistance * second.getRadius() / 2);
     }
 
 
@@ -68,7 +70,8 @@ public class GameController {
         @Override
         public void actionPerformed(ActionEvent e) {
             gameRunning = true;
-            run();
+            end = 1;
+            new Thread(new RunGame()).start();
         }
     }
 
@@ -79,33 +82,32 @@ public class GameController {
         }
     }
 
-    private void run() {
+    class RunGame implements Runnable {
+        public void run() {
+            model = new GameModel(2);
 
-        view.initGame();
-        while (gameRunning) {
-            checkCellEating(model.getPlayer());
-            checkCellEating(model.getBot());
-            if (checkPlayerEating() != null) {
-                gameRunning = false; // check for winner
+            //view.getGame().addMML(new MouseAct());
+            view.initGame();
+            end = 0;
+            while (gameRunning) {
+                for( Cell player : model.getPlayers()) {
+                    checkCellEating(player);
+                }
+                checkPlayerEating();
+                view.getGame().render(model);
+                for (Cell i : model.getPlayers()) {
+                    i.update();
+                }
             }
-            view.getGame().render(model);
-            update();
         }
     }
-
-    private void update() {
-        double x = model.getPlayer().getX() * speed * dX;
-        double y = model.getPlayer().getY() * speed * dY;
-        model.getPlayer().setX(x);
-        model.getPlayer().setY(y);
-    }
-
+/*
     private void setSpeed(int x, int y) {
         if (model.getPlayer().getRadius() - view.mouseVScenter(x, y) > 0)
-            speed = Default.maxSpeed - (model.getPlayer().getRadius() - view.mouseVScenter(x, y)
-                    / model.getPlayer().getRadius())*Default.maxSpeed;
+            model.getPlayer().setSpeed(Default.maxSpeed - (model.getPlayer().getRadius() - view.mouseVScenter(x, y))
+                    / model.getPlayer().getRadius() * Default.maxSpeed);
         else
-            speed = Default.maxSpeed;
+            model.getPlayer().setSpeed(Default.maxSpeed);
     }
 
 
@@ -120,10 +122,10 @@ public class GameController {
         public void mouseMoved(MouseEvent e) {
             Pair<Double, Double> vector = view.moveVector(e.getX(), e.getY());
             setSpeed(e.getX(), e.getY());
-            dX = vector.getFirst();
-            dY = vector.getSecond();
+            model.getPlayer().setdX(vector.getFirst());
+            model.getPlayer().setdY(vector.getSecond());
         }
-    }
+    }*/
 }
 
 
